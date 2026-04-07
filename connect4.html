@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Connect Four</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f; --surface: #13131a; --border: #2a2a3a;
+      --accent: #7c6dfa; --accent2: #fa6d9a;
+      --text: #f0f0fa; --muted: #6b6b8a;
+      --p1: #fa6d9a; --p2: #fac75a;
+      --win: #6dfa9a; --draw: #6dcffa;
+      --cell-bg: #1a1a28;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh; display: flex;
+      align-items: center; justify-content: center; padding: 2rem;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(124,109,250,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,109,250,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      animation: gridMove 20s linear infinite; pointer-events: none;
+    }
+    @keyframes gridMove { 0%{transform:translateY(0)} 100%{transform:translateY(48px)} }
+    .glow-orb { position: fixed; width: 500px; height: 500px; border-radius: 50%; filter: blur(120px); pointer-events: none; opacity: 0.15; }
+    .glow-orb.one { background: var(--accent); top: -100px; left: -100px; }
+    .glow-orb.two { background: var(--accent2); bottom: -100px; right: -100px; }
+    .card {
+      position: relative; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 24px;
+      padding: 2.5rem; width: 100%; max-width: 560px; z-index: 1;
+      animation: fadeUp 0.6s ease both;
+    }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+    .top-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--accent); background: rgba(124,109,250,0.1);
+      border: 1px solid rgba(124,109,250,0.25); border-radius: 99px;
+      padding: 4px 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .badge::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--accent); animation:pulse 2s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+    .cpp-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: #6dfa9a; background: rgba(109,250,154,0.08);
+      border: 1px solid rgba(109,250,154,0.2); border-radius: 99px;
+      padding: 4px 12px;
+    }
+    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.4rem; }
+    h1 span { color: var(--accent); }
+    .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 1.5rem; font-family: 'DM Mono', monospace; }
+
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+    .mode-btn {
+      flex: 1; padding: 10px; border-radius: 10px;
+      border: 1px solid var(--border); background: #1a1a28;
+      color: var(--muted); font-family: 'DM Mono', monospace;
+      font-size: 12px; cursor: pointer; transition: all 0.2s;
+    }
+    .mode-btn.active { border-color: var(--accent); background: rgba(124,109,250,0.12); color: var(--text); }
+
+    .scoreboard {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      align-items: center; gap: 8px;
+      background: #1a1a28; border: 1px solid var(--border);
+      border-radius: 16px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+    }
+    .score-side { text-align: center; }
+    .score-label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+    .score-num { font-size: 2rem; font-weight: 800; }
+    .score-num.p1 { color: var(--p1); }
+    .score-num.p2 { color: var(--p2); }
+    .score-vs { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; }
+    .score-draws { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; text-align: center; }
+
+    .turn-indicator {
+      text-align: center; margin-bottom: 1rem;
+      font-family: 'DM Mono', monospace; font-size: 13px; color: var(--muted);
+    }
+    .turn-indicator .tok {
+      display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+      vertical-align: middle; margin-right: 6px;
+    }
+    .turn-indicator .tok.p1 { background: var(--p1); box-shadow: 0 0 8px var(--p1); }
+    .turn-indicator .tok.p2 { background: var(--p2); box-shadow: 0 0 8px var(--p2); }
+
+    /* column hover buttons */
+    .col-buttons { display: flex; gap: 6px; margin-bottom: 6px; }
+    .col-btn {
+      flex: 1; height: 28px; background: transparent;
+      border: 1px solid transparent; border-radius: 8px;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: var(--muted);
+    }
+    .col-btn:hover:not(:disabled) { background: rgba(124,109,250,0.1); border-color: var(--accent); color: var(--text); }
+    .col-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .col-btn.p1-hover:hover:not(:disabled) { background: rgba(250,109,154,0.1); border-color: var(--p1); }
+    .col-btn.p2-hover:hover:not(:disabled) { background: rgba(250,199,90,0.1); border-color: var(--p2); }
+
+    /* board grid */
+    .board-wrap {
+      background: #10101a; border: 1px solid var(--border);
+      border-radius: 16px; padding: 10px;
+      margin-bottom: 1.25rem;
+    }
+    .board { display: flex; flex-direction: column; gap: 6px; }
+    .board-row { display: flex; gap: 6px; }
+    .cell {
+      flex: 1; aspect-ratio: 1;
+      background: var(--cell-bg); border-radius: 50%;
+      border: 1px solid #2a2a3a;
+      transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+    }
+    .cell.p1 { background: var(--p1); border-color: #d44a78; box-shadow: 0 0 12px rgba(250,109,154,0.4); }
+    .cell.p2 { background: var(--p2); border-color: #d4a040; box-shadow: 0 0 12px rgba(250,199,90,0.4); }
+    .cell.winning {
+      animation: winPulse 0.6s ease both;
+      box-shadow: 0 0 24px var(--win) !important;
+      border-color: var(--win) !important;
+    }
+    .cell.p1.winning { background: var(--p1); }
+    .cell.p2.winning { background: var(--p2); }
+    @keyframes winPulse { 0%{transform:scale(1)} 50%{transform:scale(1.12)} 100%{transform:scale(1)} }
+    @keyframes drop {
+      0% { transform: translateY(-200%); opacity: 0.5; }
+      70% { transform: translateY(6%); }
+      85% { transform: translateY(-3%); }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+    .cell.drop-anim { animation: drop 0.35s cubic-bezier(0.4,0,0.2,1) both; }
+
+    .result-banner {
+      text-align: center; padding: 12px 16px; border-radius: 12px;
+      font-size: 15px; font-weight: 700; margin-bottom: 1.25rem;
+      display: none; animation: slideIn 0.3s ease both;
+    }
+    @keyframes slideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+    .result-banner.p1-wins { background: rgba(250,109,154,0.1); border: 1px solid rgba(250,109,154,0.3); color: var(--p1); }
+    .result-banner.p2-wins { background: rgba(250,199,90,0.1);  border: 1px solid rgba(250,199,90,0.3);  color: var(--p2); }
+    .result-banner.draw    { background: rgba(109,207,250,0.1); border: 1px solid rgba(109,207,250,0.3); color: var(--draw); }
+
+    .btn-row { display: flex; gap: 10px; }
+    button.restart-btn {
+      flex: 1; background: transparent; color: var(--text);
+      border: 1px solid var(--border); border-radius: 12px;
+      font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
+      padding: 12px; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.1s;
+    }
+    button.restart-btn:hover { border-color: var(--accent); background: rgba(124,109,250,0.08); }
+    button.restart-btn:active { transform: scale(0.98); }
+    button.restart-btn.primary { background: var(--accent); border-color: var(--accent); }
+    button.restart-btn.primary:hover { background: #9380fc; }
+
+    .loading { text-align: center; padding: 2rem; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="glow-orb one"></div>
+  <div class="glow-orb two"></div>
+
+  <div class="card">
+    <div id="loading" class="loading">Loading C++ engine...</div>
+    <div id="game-content" style="display:none;">
+
+      <div class="top-badges">
+        <div class="badge">connect four</div>
+      </div>
+
+      <h1>Connect <span>Four</span></h1>
+      <p class="subtitle">drop pieces</p>
+
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="mode-ai" onclick="setMode('ai')">vs Computer</button>
+        <button class="mode-btn" id="mode-2p" onclick="setMode('2p')">2 Players</button>
+      </div>
+
+      <div class="scoreboard">
+        <div class="score-side">
+          <div class="score-label" id="p1-label">You</div>
+          <div class="score-num p1" id="p1-score">0</div>
+        </div>
+        <div>
+          <div class="score-vs">VS</div>
+          <div class="score-draws" id="draws-label">0 draws</div>
+        </div>
+        <div class="score-side">
+          <div class="score-label" id="p2-label">Computer</div>
+          <div class="score-num p2" id="p2-score">0</div>
+        </div>
+      </div>
+
+      <div class="turn-indicator" id="turn-indicator">
+        <span class="tok p1"></span> Your turn
+      </div>
+
+      <div class="col-buttons" id="col-buttons">
+        <button class="col-btn p1-hover" onclick="dropCol(0)">▼</button>
+        <button class="col-btn p1-hover" onclick="dropCol(1)">▼</button>
+        <button class="col-btn p1-hover" onclick="dropCol(2)">▼</button>
+        <button class="col-btn p1-hover" onclick="dropCol(3)">▼</button>
+        <button class="col-btn p1-hover" onclick="dropCol(4)">▼</button>
+        <button class="col-btn p1-hover" onclick="dropCol(5)">▼</button>
+        <button class="col-btn p1-hover" onclick="dropCol(6)">▼</button>
+      </div>
+
+      <div class="board-wrap">
+        <div class="board" id="board"></div>
+      </div>
+
+      <div class="result-banner" id="result-banner"></div>
+
+      <div class="btn-row">
+        <button class="restart-btn" onclick="resetScores()">↺ Reset Scores</button>
+        <button class="restart-btn primary" onclick="newRound()">New Round →</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="connect4.js"></script>
+  <script>
+    let mode = 'ai';
+    let p1Score = 0, p2Score = 0, draws = 0;
+    let boardLocked = false;
+
+    Module.onRuntimeInitialized = function() {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('game-content').style.display = 'block';
+      newRound();
+    };
+
+    function setMode(m) {
+      mode = m;
+      document.getElementById('mode-ai').classList.toggle('active', m === 'ai');
+      document.getElementById('mode-2p').classList.toggle('active', m === '2p');
+      document.getElementById('p2-label').textContent = m === 'ai' ? 'Computer' : 'Player 2';
+      resetScores();
+    }
+
+    function newRound() {
+      Module.ccall('init_game', null, [], []);
+      boardLocked = false;
+      document.getElementById('result-banner').style.display = 'none';
+      setColBtnsDisabled(false);
+      renderBoard(false);
+      updateTurnIndicator();
+    }
+
+    function resetScores() {
+      p1Score = 0; p2Score = 0; draws = 0;
+      document.getElementById('p1-score').textContent = '0';
+      document.getElementById('p2-score').textContent = '0';
+      document.getElementById('draws-label').textContent = '0 draws';
+      newRound();
+    }
+
+    function renderBoard(animate, animRow, animCol) {
+      const board = document.getElementById('board');
+      board.innerHTML = '';
+      for (let r = 0; r < 6; r++) {
+        const row = document.createElement('div');
+        row.className = 'board-row';
+        for (let c = 0; c < 7; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          const val = Module.ccall('get_cell', 'number', ['number','number'], [r, c]);
+          if (val === 1) cell.classList.add('p1');
+          if (val === 2) cell.classList.add('p2');
+          if (animate && r === animRow && c === animCol) cell.classList.add('drop-anim');
+          cell.id = 'cell-' + r + '-' + c;
+          row.appendChild(cell);
+        }
+        board.appendChild(row);
+      }
+    }
+
+    function highlightWinners() {
+      for (let i = 0; i < 4; i++) {
+        const encoded = Module.ccall('get_winning_cells', 'number', ['number'], [i]);
+        if (encoded < 0) continue;
+        const r = Math.floor(encoded / 10);
+        const c = encoded % 10;
+        const el = document.getElementById('cell-' + r + '-' + c);
+        if (el) el.classList.add('winning');
+      }
+    }
+
+    function setColBtnsDisabled(disabled) {
+      const btns = document.querySelectorAll('.col-btn');
+      btns.forEach(b => b.disabled = disabled);
+    }
+
+    function updateTurnIndicator() {
+      const player = Module.ccall('get_current_player', 'number', [], []);
+      const ind = document.getElementById('turn-indicator');
+      const cls = player === 1 ? 'p1' : 'p2';
+      const label = mode === 'ai'
+        ? (player === 1 ? 'Your turn' : 'Computer thinking...')
+        : (player === 1 ? 'Player 1\'s turn' : 'Player 2\'s turn');
+      ind.innerHTML = `<span class="tok ${cls}"></span> ${label}`;
+
+      // update col button hover class
+      document.querySelectorAll('.col-btn').forEach(b => {
+        b.classList.remove('p1-hover', 'p2-hover');
+        b.classList.add(player === 1 ? 'p1-hover' : 'p2-hover');
+      });
+    }
+
+    function handleResult(result, dropRow, dropCol) {
+      boardLocked = true;
+      setColBtnsDisabled(true);
+      renderBoard(true, dropRow, dropCol);
+
+      if (result === 1 || result === 2) highlightWinners();
+
+      const banner = document.getElementById('result-banner');
+      banner.style.display = 'block';
+      banner.style.animation = 'none';
+      banner.offsetHeight;
+      banner.style.animation = '';
+
+      if (result === 1) {
+        p1Score++;
+        document.getElementById('p1-score').textContent = p1Score;
+        banner.className = 'result-banner p1-wins';
+        banner.textContent = mode === 'ai' ? 'You win! 🎉' : 'Player 1 wins! 🎉';
+      } else if (result === 2) {
+        p2Score++;
+        document.getElementById('p2-score').textContent = p2Score;
+        banner.className = 'result-banner p2-wins';
+        banner.textContent = mode === 'ai' ? 'Computer wins!' : 'Player 2 wins! 🎉';
+      } else {
+        draws++;
+        document.getElementById('draws-label').textContent = draws + ' draw' + (draws > 1 ? 's' : '');
+        banner.className = 'result-banner draw';
+        banner.textContent = "It's a draw!";
+      }
+    }
+
+    function dropCol(col) {
+      if (boardLocked) return;
+      const gameOver = Module.ccall('is_game_over', 'number', [], []);
+      if (gameOver) return;
+
+      const dropRow = Module.ccall('get_next_row', 'number', ['number'], [col]);
+      if (dropRow === -1) return;
+
+      const result = Module.ccall('drop_piece', 'number', ['number'], [col]);
+      if (result === -1) return;
+
+      if (result !== 0) {
+        handleResult(result, dropRow, col);
+        return;
+      }
+
+      renderBoard(true, dropRow, col);
+      updateTurnIndicator();
+
+      if (mode === 'ai') {
+        boardLocked = true;
+        setColBtnsDisabled(true);
+        setTimeout(() => {
+          const aiDropRow = Module.ccall('get_next_row', 'number', ['number'], [3]);
+          // find where computer will drop (check all cols for best)
+          let bestRow = -1, bestCol = -1;
+          for (let c = 0; c < 7; c++) {
+            const r = Module.ccall('get_next_row', 'number', ['number'], [c]);
+            if (r !== -1) { bestRow = r; bestCol = c; }
+          }
+          const aiResult = Module.ccall('computer_drop', 'number', [], []);
+          boardLocked = false;
+
+          // figure out where it actually dropped
+          let aiRow = -1, aiCol = -1;
+          for (let c = 0; c < 7; c++) {
+            const r = Module.ccall('get_next_row', 'number', ['number'], [c]);
+            const prev = Module.ccall('get_cell', 'number', ['number','number'], [r+1 < 6 ? r+1 : r, c]);
+            const cur = Module.ccall('get_cell', 'number', ['number','number'], [r === -1 ? 0 : r+1, c]);
+            if (cur === 2) { aiRow = r === -1 ? 0 : r+1; aiCol = c; break; }
+          }
+
+          if (aiResult !== 0 && aiResult !== -1) {
+            handleResult(aiResult, aiRow >= 0 ? aiRow : 0, aiCol >= 0 ? aiCol : 3);
+          } else {
+            setColBtnsDisabled(false);
+            renderBoard(true, aiRow >= 0 ? aiRow : 0, aiCol >= 0 ? aiCol : 3);
+            updateTurnIndicator();
+          }
+        }, 600);
+      }
+    }
+  </script>
+</body>
+</html>
